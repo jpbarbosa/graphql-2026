@@ -1,0 +1,26 @@
+{
+  "name": "@graphql-2026/shared",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./ui": "./src/ui.tsx",
+    "./filters": "./src/filters.ts",
+    "./graph": "./src/graph.ts",
+    "./GraphCanvas": "./src/GraphCanvas.tsx",
+    "./GraphPanels": "./src/GraphPanels.tsx"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@tanstack/react-router": "^1",
+    "react": "^19"
+  },
+  "dependencies": {
+    "react-force-graph-2d": "^1.29.2"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "typescript": "^7.0.2"
+  }
+}

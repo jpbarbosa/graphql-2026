@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env
+*.tsbuildinfo
+web/src/__generated__/*
+!web/src/__generated__/.gitkeep
+web/src/routeTree.gen.ts

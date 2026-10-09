@@ -1,0 +1,145 @@
+# graphql-2026 on this Mac's shared infrastructure (~/Sites/CLAUDE.md): Postgres is shared-postgres
+# on the external `services` network, and Traefik serves the apps over `traefik-proxy` by the
+# labels below. No host ports anywhere.
+#
+#   https://graphql-2026.dev.jp7.io          web (Relay)      /graphql -> graphql-2026-api
+#   https://graphql-2026-apollo.dev.jp7.io   web-apollo       /graphql -> graphql-2026-api
+#
+# Service names carry the project prefix: bare `web` and `api` are already taken on
+# traefik-proxy, and two holders of one name there are a silent round-robin.
+name: graphql-2026
+
+x-node: &node
+  image: node:24.19.0-alpine
+  working_dir: /app
+  init: true
+  volumes:
+    - .:/app
+    # Linux node_modules live in volumes: the Mac's copies hold darwin binaries (rolldown,
+    # relay-compiler, Tailwind's oxide) that cannot run in these containers.
+    - node-modules:/app/node_modules
+    - api-node-modules:/app/api/node_modules
+    - shared-node-modules:/app/shared/node_modules
+    - web-node-modules:/app/web/node_modules
+    - web-apollo-node-modules:/app/web-apollo/node_modules
+
+# Both come from .env (copy .env.example), which is gitignored: they carry a password.
+x-database: &database
+  DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env, see .env.example}
+  # Only to create the database on first boot; the API itself never connects with it.
+  ADMIN_DATABASE_URL: ${ADMIN_DATABASE_URL:?set ADMIN_DATABASE_URL in .env, see .env.example}
+
+x-tls: &tls
+  traefik.enable: "true"
+  traefik.docker.network: traefik-proxy
+
+services:
+  # One install for every workspace, so the long-running services never race on node_modules.
+  graphql-2026-install:
+    <<: *node
+    command: npm install --no-audit --no-fund
+    restart: "no"
+
+  graphql-2026-migrate:
+    <<: *node
+    command: npm run db:setup --workspace api
+    environment: *database
+    networks: [services]
+    restart: "no"
+    depends_on:
+      graphql-2026-install:
+        condition: service_completed_successfully
+
+  graphql-2026-api:
+    <<: *node
+    command: npm run dev --workspace api
+    environment:
+      <<: *database
+      LOG_SQL: ${LOG_SQL:-0}
+    networks: [traefik-proxy, services]
+    restart: unless-stopped
+    healthcheck:
+      # By content: a neighbour holding the port would answer too, but not with this schema.
+      test: ["CMD-SHELL", "wget -qO- 'http://127.0.0.1:4000/graphql?query=%7Bgenres%7Bname%7D%7D' | grep -q '\"genres\"'"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
+      # Traefik routes nothing to a container until its first check passes, so probe fast at boot.
+      start_interval: 1s
+    labels:
+      <<: *tls
+      traefik.http.routers.graphql-2026-api.rule: (Host(`graphql-2026.dev.jp7.io`) || Host(`graphql-2026-apollo.dev.jp7.io`)) && PathPrefix(`/graphql`)
+      traefik.http.routers.graphql-2026-api.entrypoints: websecure
+      traefik.http.routers.graphql-2026-api.priority: "200"
+      traefik.http.routers.graphql-2026-api.tls.certresolver: le-dns
+      traefik.http.routers.graphql-2026-api.tls.domains[0].main: "*.dev.jp7.io"
+      traefik.http.services.graphql-2026-api.loadbalancer.server.port: "4000"
+    depends_on:
+      graphql-2026-migrate:
+        condition: service_completed_successfully
+
+  graphql-2026-web:
+    <<: *node
+    command: npm run dev --workspace web
+    environment:
+      VITE_PORT: "5173"
+      VITE_HMR_HOST: graphql-2026.dev.jp7.io
+    networks: [traefik-proxy]
+    restart: unless-stopped
+    labels:
+      <<: *tls
+      # Not /graphql: while the API is starting or unhealthy Traefik drops its router, and this one
+      # would then answer /graphql with the app's index.html, a 200 on the wrong page.
+      traefik.http.routers.graphql-2026-web.rule: Host(`graphql-2026.dev.jp7.io`) && !PathPrefix(`/graphql`)
+      traefik.http.routers.graphql-2026-web.entrypoints: websecure
+      traefik.http.routers.graphql-2026-web.priority: "100"
+      traefik.http.routers.graphql-2026-web.tls.certresolver: le-dns
+      traefik.http.routers.graphql-2026-web.tls.domains[0].main: "*.dev.jp7.io"
+      traefik.http.routers.graphql-2026-web.service: graphql-2026-web
+      traefik.http.services.graphql-2026-web.loadbalancer.server.port: "5173"
+      traefik.http.routers.graphql-2026-web-http.rule: Host(`graphql-2026.dev.jp7.io`)
+      traefik.http.routers.graphql-2026-web-http.entrypoints: web
+      traefik.http.routers.graphql-2026-web-http.middlewares: php7-https-redirect@file
+      traefik.http.routers.graphql-2026-web-http.service: graphql-2026-web
+    depends_on:
+      graphql-2026-install:
+        condition: service_completed_successfully
+
+  graphql-2026-web-apollo:
+    <<: *node
+    command: npm run dev --workspace web-apollo
+    environment:
+      VITE_PORT: "5174"
+      VITE_HMR_HOST: graphql-2026-apollo.dev.jp7.io
+    networks: [traefik-proxy]
+    restart: unless-stopped
+    labels:
+      <<: *tls
+      traefik.http.routers.graphql-2026-web-apollo.rule: Host(`graphql-2026-apollo.dev.jp7.io`) && !PathPrefix(`/graphql`)
+      traefik.http.routers.graphql-2026-web-apollo.entrypoints: websecure
+      traefik.http.routers.graphql-2026-web-apollo.priority: "100"
+      traefik.http.routers.graphql-2026-web-apollo.tls.certresolver: le-dns
+      traefik.http.routers.graphql-2026-web-apollo.tls.domains[0].main: "*.dev.jp7.io"
+      traefik.http.routers.graphql-2026-web-apollo.service: graphql-2026-web-apollo
+      traefik.http.services.graphql-2026-web-apollo.loadbalancer.server.port: "5174"
+      traefik.http.routers.graphql-2026-web-apollo-http.rule: Host(`graphql-2026-apollo.dev.jp7.io`)
+      traefik.http.routers.graphql-2026-web-apollo-http.entrypoints: web
+      traefik.http.routers.graphql-2026-web-apollo-http.middlewares: php7-https-redirect@file
+      traefik.http.routers.graphql-2026-web-apollo-http.service: graphql-2026-web-apollo
+    depends_on:
+      graphql-2026-install:
+        condition: service_completed_successfully
+
+networks:
+  traefik-proxy:
+    external: true
+  services:
+    external: true
+
+volumes:
+  node-modules: {}
+  api-node-modules: {}
+  shared-node-modules: {}
+  web-node-modules: {}
+  web-apollo-node-modules: {}

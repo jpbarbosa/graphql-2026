@@ -1,0 +1,13 @@
+{
+  "src": "./src",
+  "schema": "../api/schema.graphql",
+  "language": "typescript",
+  "artifactDirectory": "./src/__generated__",
+  "eagerEsModules": true,
+  "excludes": [
+    "**/node_modules/**",
+    "**/__generated__/**",
+    "**/routeTree.gen.ts"
+  ],
+  "noSourceControl": true
+}

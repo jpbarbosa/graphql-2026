@@ -1,0 +1,31 @@
+{
+  "name": "api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon --quiet --watch src --ext ts --exec 'node src/server.ts'",
+    "start": "node src/server.ts",
+    "schema": "node src/print-schema.ts",
+    "db:setup": "node src/db/setup.ts",
+    "db:reset": "node src/db/setup.ts --reset",
+    "db:generate": "drizzle-kit generate",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@pothos/core": "^4.15.1",
+    "@pothos/plugin-dataloader": "^4.4.6",
+    "@pothos/plugin-relay": "^4.8.1",
+    "dataloader": "^2.2.3",
+    "drizzle-orm": "^0.45.4",
+    "graphql": "^17.0.2",
+    "graphql-yoga": "^5.24.4",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.1",
+    "@types/pg": "^8.23.1",
+    "drizzle-kit": "^0.31.11",
+    "nodemon": "^3.1.14",
+    "typescript": "^7.0.2"
+  }
+}

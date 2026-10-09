@@ -1,0 +1,8 @@
+@import 'tailwindcss';
+@source '../../shared/src';
+
+@theme {
+  --color-movie: oklch(0.55 0.2 270);
+  --color-person: oklch(0.72 0.16 65);
+  --color-genre: oklch(0.65 0.15 160);
+}

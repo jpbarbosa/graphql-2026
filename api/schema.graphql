@@ -1,0 +1,268 @@
+input AddCreditInput {
+  character: String
+  movieId: ID!
+  personId: ID!
+  role: CreditRole!
+}
+
+type AddCreditPayload {
+  credit: Credit!
+  movie: Movie!
+  person: Person!
+}
+
+input CreateMovieInput {
+  genreIds: [ID!]
+  rating: Float
+  released: Int!
+  runtime: Int
+  tagline: String
+  title: String!
+}
+
+type CreateMoviePayload {
+  movie: Movie!
+}
+
+input CreatePersonInput {
+  born: Int
+  name: String!
+}
+
+type CreatePersonPayload {
+  person: Person!
+}
+
+"""The edge of the movie graph: one person, one movie, one role."""
+type Credit implements Node {
+  character: String
+  id: ID!
+  movie: Movie!
+  person: Person!
+  role: CreditRole!
+}
+
+enum CreditRole {
+  ACTOR
+  DIRECTOR
+  WRITER
+}
+
+input DeleteMovieInput {
+  id: ID!
+}
+
+type DeleteMoviePayload {
+  deletedMovieId: ID!
+}
+
+input DeletePersonInput {
+  id: ID!
+}
+
+type DeletePersonPayload {
+  deletedPersonId: ID!
+}
+
+type Genre implements Node {
+  id: ID!
+  movieCount: Int!
+  name: String!
+}
+
+type Movie implements Node {
+  """Directors first, then writers, then the cast in billing order."""
+  credits(role: CreditRole): [Credit!]!
+  genres: [Genre!]!
+  id: ID!
+
+  """0 to 10"""
+  rating: Float
+  released: Int!
+
+  """Minutes"""
+  runtime: Int
+  slug: String!
+  tagline: String
+  title: String!
+}
+
+type MovieConnection {
+  edges: [MovieEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type MovieEdge {
+  cursor: String!
+  node: Movie!
+}
+
+input MovieFilter {
+  """Movies in ANY of these genres"""
+  genreIds: [ID!]
+  minRating: Float
+
+  """Movies crediting ALL of these people"""
+  personIds: [ID!]
+  releasedFrom: Int
+  releasedTo: Int
+
+  """Narrows personIds to credits in this role"""
+  role: CreditRole
+
+  """Case-insensitive match on the title"""
+  search: String
+}
+
+"""
+Exactly one field: a @oneOf input, standardized in the September 2025 spec.
+"""
+input MovieLookup @oneOf {
+  id: ID
+  slug: String
+}
+
+enum MovieOrder {
+  NEWEST
+  OLDEST
+  TITLE
+  TOP_RATED
+}
+
+type Mutation {
+  addCredit(input: AddCreditInput!): AddCreditPayload!
+  createMovie(input: CreateMovieInput!): CreateMoviePayload!
+  createPerson(input: CreatePersonInput!): CreatePersonPayload!
+  deleteMovie(input: DeleteMovieInput!): DeleteMoviePayload!
+
+  """Also removes every credit of this person."""
+  deletePerson(input: DeletePersonInput!): DeletePersonPayload!
+  removeCredit(input: RemoveCreditInput!): RemoveCreditPayload!
+
+  """
+  Only the fields present in the input change; an explicit null clears an optional field.
+  """
+  updateMovie(input: UpdateMovieInput!): UpdateMoviePayload!
+  updatePerson(input: UpdatePersonInput!): UpdatePersonPayload!
+}
+
+interface Node {
+  id: ID!
+}
+
+type PageInfo {
+  endCursor: String
+  hasNextPage: Boolean!
+  hasPreviousPage: Boolean!
+  startCursor: String
+}
+
+type Path {
+  hops: Int!
+
+  """links[i] joins people[i] and people[i + 1]"""
+  links: [PathLink!]!
+
+  """From the first person to the second, in order"""
+  people: [Person!]!
+
+  """SQL queries the search ran, one per hop"""
+  queries: Int!
+
+  """People the search reached before stopping"""
+  searched: Int!
+}
+
+"""One hop: two people credited on the same movie."""
+type PathLink {
+  """The credit of the person this hop leaves from"""
+  from: Credit!
+  movie: Movie!
+
+  """The credit of the person this hop arrives at"""
+  to: Credit!
+}
+
+type Person implements Node {
+  born: Int
+
+  """Newest movie first."""
+  credits(role: CreditRole): [Credit!]!
+  id: ID!
+  name: String!
+}
+
+type PersonConnection {
+  edges: [PersonEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type PersonEdge {
+  cursor: String!
+  node: Person!
+}
+
+input PersonFilter {
+  """People with at least one credit in this role"""
+  role: CreditRole
+
+  """Case-insensitive match on the name"""
+  search: String
+}
+
+type Query {
+  genres: [Genre!]!
+  movie(by: MovieLookup!): Movie
+  movies(after: String, before: String, filter: MovieFilter, first: Int, last: Int, orderBy: MovieOrder = TITLE): MovieConnection!
+  node(id: ID!): Node
+  nodes(ids: [ID!]!): [Node]!
+  people(after: String, before: String, filter: PersonFilter, first: Int, last: Int): PersonConnection!
+
+  """
+  The fewest movies linking two people, or null when they are further apart than maxHops.
+  """
+  shortestPath(
+    from: ID!
+    maxHops: Int = 6
+
+    """Only credits in this role count: ACTOR finds co-stars"""
+    role: CreditRole
+    to: ID!
+  ): Path
+}
+
+input RemoveCreditInput {
+  id: ID!
+}
+
+type RemoveCreditPayload {
+  deletedCreditId: ID!
+  movie: Movie!
+  person: Person!
+}
+
+input UpdateMovieInput {
+  genreIds: [ID!]
+  id: ID!
+  rating: Float
+  released: Int
+  runtime: Int
+  tagline: String
+  title: String
+}
+
+type UpdateMoviePayload {
+  movie: Movie!
+}
+
+input UpdatePersonInput {
+  born: Int
+  id: ID!
+  name: String
+}
+
+type UpdatePersonPayload {
+  person: Person!
+}
